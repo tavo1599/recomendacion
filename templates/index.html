@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Movie Recommendations</title>
+        <!-- Bootstrap CSS -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+        <style>
+            body {
+                background-color: #f8f9fa;
+            }
+            .movie-card {
+                max-width: 500px;
+                margin: 0 auto;
+            }
+            .movie-poster {
+                width: 60px; /* Cambia el tamaño del ancho */
+                height: 90px; /* Cambia el tamaño del alto */
+                object-fit: cover; /* Asegúrate de que la imagen se ajuste sin deformarse */
+                border-radius: 8px;
+                margin-right: 15px;
+            }
+            .movie-title {
+                font-size: 1.1rem;
+                font-weight: bold;
+            }
+            .movie-details {
+                font-size: 0.85rem;
+                color: #6c757d;
+            }
+            .movie-card-container {
+                display: flex;
+                align-items: center;
+                padding: 15px;
+                background-color: white;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                transition: transform 0.2s ease-in-out;
+            }
+            .movie-card-container:hover {
+                transform: scale(1.02); /* Efecto al pasar el mouse */
+            }
+
+            canvas {
+                width: 100% !important; /* Ajusta al 100% del contenedor */
+                height: 250px !important; /* Altura más pequeña */
+                max-height: 250px; /* Limita la altura máxima */
+            }
+
+            .chart-section {
+                max-height: 300px; /* Limita la altura máxima del contenedor */
+                overflow: hidden; /* Asegura que no se desborde el contenido */
+                padding: 10px; /* Espaciado interno */
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Navbar -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">🎥 Movie Manis</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showDashboard()">Dashboard</a>
+                        </li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filterByGenre('Action')">Action</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filterByGenre('Drama')">Drama</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filterByGenre('Romance')">Romance</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filterByGenre('Comedy')">Comedy</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filterByGenre('Adventure')">Adventure</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filterByGenre('Mystery')">Mystery</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filterByGenre('Sci-Fi')">Sci-Fi</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filterByGenre('Animation')">Anime</a></li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <div id="dashboard" class="container py-5" style="display:none;">
+    <h2 class="text-center mb-4">📊 Movie Analytics</h2>
+    <div class="row">
+        <div class="col-md-6">
+            <h5 class="text-center">Movies by Genre</h5>
+            <canvas id="genreChart"></canvas>
+        </div>
+        <div class="col-md-6">
+            <h5 class="text-center">Movies by Director</h5>
+            <canvas id="directorChart"></canvas>
+        </div>
+        <div class="chart-section">
+            <h3>Movies by Year</h3>
+            <canvas id="moviesByYearChart"></canvas>
+        </div>
+    
+        <!-- Gráfico de Películas por Duración -->
+        <div class="chart-section">
+            <h3>Movies by Duration</h3>
+            <canvas id="moviesByDurationChart"></canvas>
+        </div>
+    
+        <!-- Gráfico de Películas por Idioma -->
+        <div class="chart-section">
+            <h3>Movies by Language</h3>
+            <canvas id="moviesByLanguageChart"></canvas>
+        </div>
+    </div>
+</div>
+
+        <div class="container py-5">
+            <h1 class="text-center mb-4">🎥 Movie Recommendations</h1>
+            <div class="mb-4">
+                <input type="text" id="movie-title" class="form-control mb-3" placeholder="Enter a movie title">
+                <button onclick="getRecommendations()" class="btn btn-primary w-100">Get Recommendations</button>
+            </div>
+            <div id="searched-movie" class="mb-5"></div>
+            <h2 class="mb-3">Recommendations:</h2>
+            <div id="recommendation-list" class="row g-3"></div>
+            <p id="total-movies" class="text-muted"></p>
+
+        </div>
+
+        <script>
+
+            function showDashboard() {
+                const dashboardSection = document.getElementById('dashboard');
+                const recommendationSection = document.getElementById('recommendation-list');
+                
+                // Alternar visibilidad entre las secciones
+                dashboardSection.style.display = 'block';
+                recommendationSection.style.display = 'none';
+            }
+            // Obtener recomendaciones basadas en un título
+            async function getRecommendations() {
+                const title = document.getElementById('movie-title').value;
+                try {
+                    const response = await fetch(`http://127.0.0.1:5000/recommend?title=${title}`);
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    const data = await response.json();
+    
+                    const searchedMovieContainer = document.getElementById('searched-movie');
+                    const list = document.getElementById('recommendation-list');
+                    searchedMovieContainer.innerHTML = ''; // Limpiar película buscada
+                    list.innerHTML = ''; // Limpiar recomendaciones previas
+    
+                    if (data.error) {
+                        const errorMessage = document.createElement('div');
+                        errorMessage.className = "alert alert-danger";
+                        errorMessage.textContent = data.error;
+                        searchedMovieContainer.appendChild(errorMessage);
+                    } else {
+                        // Mostrar la película buscada
+                        displayMovie(data.searched_movie, searchedMovieContainer);
+    
+                        // Mostrar las recomendaciones
+                        data.recommended_movies.forEach(recMovie => {
+                            const col = document.createElement('div');
+                            col.className = "col-12 col-md-6";
+                            displayMovie(recMovie, col);
+                            list.appendChild(col);
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error fetching recommendations:", error);
+                    alert("Error fetching recommendations. Please try again later.");
+                }
+            }
+
+            // Filtrar por género
+            let currentGenre = ''; // Género actual seleccionado
+let currentPage = 1;   // Página actual (cada página muestra 6 películas)
+const moviesPerPage = 6; // Número de películas por página
+let filteredMovies = []; // Lista de películas filtradas
+
+async function loadDashboard() {
+    try {
+        const response = await fetch('http://127.0.0.1:5000/dashboard');
+        const data = await response.json();
+
+        console.log('Datos del Dashboard:', data);  // Verifica los datos en la consola
+
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+
+        // Renderizar gráfico de géneros
+        renderGenreChart(data.movies_by_genre);
+
+        // Renderizar gráfico de directores
+        renderDirectorChart(data.movies_by_director);
+
+        // Renderizar gráfico de películas por año
+        renderMoviesByYearChart(data.movies_by_year);
+
+        // Renderizar gráfico de películas por duración
+        renderMoviesByDurationChart(data.movies_by_duration);
+
+        // Renderizar gráfico de películas por idioma
+        renderMoviesByLanguageChart(data.movies_by_language);
+
+    } catch (error) {
+        console.error("Error al cargar el dashboard:", error);
+        alert("Error al cargar el dashboard. Intenta nuevamente.");
+    }
+}
+
+// Gráfico de Películas por Género
+function renderGenreChart(moviesByGenre) {
+    const ctx = document.getElementById('genreChart').getContext('2d');
+    const genres = moviesByGenre.map(item => item.genre);
+    const counts = moviesByGenre.map(item => item.count);
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: genres,
+            datasets: [{
+                label: 'Movies by Genre',
+                data: counts,
+                backgroundColor: [
+                    '#FF5733', '#33FF57', '#3357FF', '#F3C300', '#FF33A8', '#33FFF3', '#FF8333'
+                ],
+                borderColor: '#fff',
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,  // Asegura que el gráfico se ajuste al tamaño del contenedor
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    enabled: true,
+                }
+            },
+            aspectRatio: 1,  // Hace que el gráfico sea más pequeño al mantener un ratio de aspecto de 1
+        }
+    });
+}
+
+// Gráfico de Películas por Director
+function renderDirectorChart(moviesByDirector) {
+    const ctx = document.getElementById('directorChart').getContext('2d');
+    const directors = moviesByDirector.slice(0, 5).map(item => item.director);
+    const counts = moviesByDirector.slice(0, 5).map(item => item.count);
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: directors,
+            datasets: [{
+                label: 'Movies by Director',
+                data: counts,
+                backgroundColor: '#FF8A65', // Color personalizado para las barras
+                borderColor: '#FF5733', // Color de borde
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false,
+                },
+                tooltip: {
+                    enabled: true,
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Directors'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Number of Movies'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderMoviesByYearChart(moviesByYear) {
+    const ctx = document.getElementById('moviesByYearChart').getContext('2d');
+    const years = moviesByYear.map(item => item.year);
+    const counts = moviesByYear.map(item => item.count);
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: years,
+            datasets: [{
+                label: 'Movies by Year',
+                data: counts,
+                backgroundColor: '#4CAF50',
+                borderColor: '#388E3C',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true, // Mantiene el aspecto del gráfico
+            aspectRatio: 2, // Relación de aspecto 2:1 para un gráfico compacto
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Year'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Number of Movies'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderMoviesByDurationChart(moviesByDuration) {
+    const ctx = document.getElementById('moviesByDurationChart').getContext('2d');
+    const durations = moviesByDuration.map(item => item.duration_range);
+    const counts = moviesByDuration.map(item => item.count);
+
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: durations,
+            datasets: [{
+                label: 'Movies by Duration',
+                data: counts,
+                backgroundColor: ['#FFEB3B', '#FFC107', '#FF9800', '#FF5722'],
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true, // Mantiene el aspecto del gráfico
+            aspectRatio: 1.5, // Relación de aspecto ajustada
+            plugins: {
+                legend: {
+                    position: 'top', // Ajusta la posición de la leyenda
+                }
+            }
+        }
+    });
+}
+
+
+function renderMoviesByLanguageChart(moviesByLanguage) {
+    const ctx = document.getElementById('moviesByLanguageChart').getContext('2d');
+    const languages = moviesByLanguage.map(item => item.language);
+    const counts = moviesByLanguage.map(item => item.count);
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: languages,
+            datasets: [{
+                label: 'Movies by Language',
+                data: counts,
+                backgroundColor: '#64B5F6',
+                borderColor: '#42A5F5',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Language'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Number of Movies'
+                    }
+                }
+            }
+        }
+    });
+}
+
+
+// Cargar Dashboard al iniciar
+window.onload = loadDashboard;
+
+// Filtrar por género
+async function filterByGenre(genre) {
+    try {
+        const response = await fetch(`http://127.0.0.1:5000/movies?genre=${genre}`);
+        const data = await response.json();
+
+        if (!Array.isArray(data)) {
+            throw new Error("Invalid response format");
+        }
+
+        const filteredMovies = data.filter(movie => movie.genre.toLowerCase().includes(genre.toLowerCase()));
+
+        const list = document.getElementById('recommendation-list');
+        list.innerHTML = '';
+
+        if (filteredMovies.length === 0) {
+            const errorMessage = document.createElement('div');
+            errorMessage.className = "alert alert-warning";
+            errorMessage.textContent = `No movies found in the genre: ${genre}`;
+            list.appendChild(errorMessage);
+        } else {
+            filteredMovies.forEach(movie => {
+                const col = document.createElement('div');
+                col.className = "col-12 col-md-6 mb-3";
+                displayMovie(movie, col); // Utiliza la función actualizada displayMovie
+                list.appendChild(col);
+            });
+        }
+    } catch (error) {
+        console.error("Error fetching movies:", error);
+        alert("Error fetching movies. Please try again later.");
+    }
+}
+
+function displayMovie(movie, container) {
+    const card = document.createElement('div');
+    card.className = "movie-card-container";
+
+    const img = document.createElement('img');
+    img.src = movie.poster || 'https://via.placeholder.com/150'; // Usa el campo `poster`
+    img.alt = `${movie.title} Poster`;
+    img.className = "movie-poster";
+
+    const content = document.createElement('div');
+
+    const title = document.createElement('p');
+    title.textContent = movie.title;
+    title.className = "movie-title mb-1";
+
+    const genre = document.createElement('p');
+    genre.textContent = `Genre: ${movie.genre || 'N/A'}`;
+    genre.className = "movie-details mb-1";
+
+    const duration = document.createElement('p');
+    duration.textContent = `Duration: ${movie.duration || 'N/A'} mins`;
+    duration.className = "movie-details mb-1";
+
+    const language = document.createElement('p');
+    language.textContent = `Language: ${movie.language || 'N/A'}`;
+    language.className = "movie-details mb-0";
+
+    content.appendChild(title);
+    content.appendChild(genre);
+    content.appendChild(duration);
+    content.appendChild(language);
+
+    card.appendChild(img);
+    card.appendChild(content);
+    container.appendChild(card);
+}
+
+// Mostrar películas y agregar botón "Ver más"
+function showMovies(movies) {
+    const list = document.getElementById('recommendation-list');
+    list.innerHTML = ''; // Limpia la lista antes de mostrar
+
+    // Calcular el rango de películas a mostrar según la página actual
+    const startIndex = (currentPage - 1) * moviesPerPage;
+    const endIndex = startIndex + moviesPerPage;
+    const moviesToShow = movies.slice(startIndex, endIndex);
+    const totalMoviesText = document.getElementById('total-movies');
+totalMoviesText.textContent = `Total Movies: ${filteredMovies.length}`;
+
+    // Crear tarjetas para las películas a mostrar
+    moviesToShow.forEach(movie => {
+        const col = document.createElement('div');
+        col.className = "col-12 col-md-6";
+        displayMovie(movie, col);
+        list.appendChild(col);
+    });
+
+    // Agregar botón "Ver más" si hay más películas disponibles
+    if (endIndex < movies.length) {
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = "col-12 text-center mt-3";
+
+        const button = document.createElement('button');
+        button.className = "btn btn-primary";
+        button.textContent = "Ver más";
+        button.onclick = loadMoreMovies;
+
+        buttonContainer.appendChild(button);
+        list.appendChild(buttonContainer);
+    }
+}
+
+// Cargar más películas
+function loadMoreMovies() {
+    currentPage++; // Incrementa la página actual
+    showMovies(filteredMovies); // Vuelve a mostrar las películas (ahora con más resultados)
+}
+            // Mostrar una película en un contenedor
+            function displayMovie(movie, container) {
+                const card = document.createElement('div');
+                card.className = "movie-card d-flex align-items-center bg-white shadow rounded p-3";
+
+                const img = document.createElement('img');
+                img.src = movie.poster || 'https://via.placeholder.com/150'; // Usa el campo `poster`
+                img.alt = `${movie.title} Poster`;
+                img.className = "movie-poster me-3";
+
+                const content = document.createElement('div');
+
+                const title = document.createElement('p');
+                title.textContent = movie.title;
+                title.className = "movie-title mb-1";
+
+                const genre = document.createElement('p');
+                genre.textContent = `Genre: ${movie.genre || 'N/A'}`;
+                genre.className = "movie-details mb-1";
+
+                const duration = document.createElement('p');
+                duration.textContent = `Duration: ${movie.duration || 'N/A'} mins`;
+                duration.className = "movie-details mb-1";
+
+                const language = document.createElement('p');
+                language.textContent = `Language: ${movie.language || 'N/A'}`;
+                language.className = "movie-details mb-0";
+
+                content.appendChild(title);
+                content.appendChild(genre);
+                content.appendChild(duration);
+                content.appendChild(language);
+
+                card.appendChild(img);
+                card.appendChild(content);
+                container.appendChild(card);
+            }
+        </script>
+    </body>
+</html>
